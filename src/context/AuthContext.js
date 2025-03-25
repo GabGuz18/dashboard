@@ -1,61 +1,61 @@
 'use client'
 
 import axios from "axios";
-import { ClockFading } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createContext, useEffect, useState } from "react";
-
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setAuthLoading(true);
-      axios.get('http://localhost:8000/auth/user', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-        .then( response => setUser(response.data))
-        .catch( err => {
-          console.log(err)
+    const checkUserAuthentication = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await axios.get('http://localhost:8000/auth/user', {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          setUser(response.data);
+          setIsLoggedIn(true);
+        } catch (err) {
+          console.log(err);
           logout();
-        })
+        } finally {
+          setAuthLoading(false);
+        }
+      } else {
+        setAuthLoading(false);
       }
-    setAuthLoading(false)
-  }, [])
-  
+    };
+
+    checkUserAuthentication();
+  }, []);
 
   const login = async (username, password) => {
     try {
-      console.log(username, password)
-
       setAuthLoading(true);
       const res = await axios.post('http://localhost:8000/auth/login', {
         username,
         password
-      })
-      console.log(res.data)
+      });
       localStorage.setItem('token', res.data.access_token);
-      setUser(await getUserInfo());
-      setAuthError(false);
+      const userInfo = await getUserInfo();
+      setUser(userInfo);
+      setAuthError(null);
       setIsLoggedIn(true);
-
-      router.replace('/dashboard/reportes')
-
+      router.replace('/dashboard/reportes');
     } catch (err) {
-      console.log(err)
-      setAuthError(err.response.data.detail)
+      console.log(err);
+      setAuthError(err.response?.data?.detail || 'Login failed');
     } finally {
       setAuthLoading(false);
     }
@@ -63,18 +63,18 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      setAuthLoading(true)
+      setAuthLoading(true);
       await axios.post('http://localhost:8000/auth/registro', {
         username,
         email,
         password
-      })
-      router.replace('/login?registered=true')
+      });
+      router.replace('/auth/login?registered=true');
     } catch (err) {
-      console.log(err)
-      setAuthError(err.response.data.detail)
+      console.log(err);
+      setAuthError(err.response?.data?.detail || 'Registration failed');
     } finally {
-      setAuthLoading(false)
+      setAuthLoading(false);
     }
   }
 
@@ -82,26 +82,23 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     setUser(null);
     setIsLoggedIn(false);
-    router.replace('/auth/login')
+    router.replace('/auth/login');
   }
 
   const getUserInfo = async () => {
     const token = localStorage.getItem('token');
-    if (!token) return; 
+    if (!token) return null; 
     try {
-      setAuthLoading(true)
       const res = await axios.get('http://localhost:8000/auth/user', {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      })
-      return res.data
+      });
+      return res.data;
     } catch (err) {
-      console.log(err)
+      console.log(err);
       logout();
-      return;
-    } finally {
-      setAuthLoading(false);
+      return null;
     }
   }
 
@@ -118,8 +115,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={values}>
-      { children }
+      {children}
     </AuthContext.Provider>   
   )
-
 }
